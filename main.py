@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy.optimize import minimize
 
 def load_gdp_data(file_path: str) -> pd.DataFrame:
     """
@@ -66,3 +67,50 @@ def prepare_training_data(
     
     return X, y, list(filtered_df.index)
 
+def train_synthetic_control_model(X: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """
+    Trains the synthetic control model to find optimal weights.
+
+    Args:
+        X: NumPy array of input country GDPs for the pre-treatment period
+           (n_years, n_input_countries).
+        y: NumPy array of output country GDP for the pre-treatment period
+           (n_years,).
+
+    Returns:
+        NumPy array of optimal weights (n_input_countries,).
+    """
+    n_input_countries = X.shape[1]
+
+    # Objective function: Minimize the squared difference between X @ w and y
+    # f(w) = sum((X @ w - y)**2)
+    def objective(weights):
+        return np.sum((X @ weights - y)**2)
+
+    # Constraints:
+    # 1. Weights must be non-negative (w_i >= 0)
+    # 2. Weights must sum to 1 (sum(w_i) = 1)
+    
+    # Bounds for weights (non-negative)
+    bounds = [(0., 1.) for _ in range(n_input_countries)] # Weights between 0 and 1
+
+    # Linear equality constraint: sum(w_i) - 1 = 0
+    # This is of the form: A_eq @ w - b_eq = 0
+    constraints = ({'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1})
+
+    # Initial guess for weights (equal distribution)
+    initial_weights = np.array([1. / n_input_countries] * n_input_countries)
+
+    # Perform the optimization
+    result = minimize(
+        objective,
+        initial_weights,
+        method='SLSQP', # Sequential Least SQuares Programming
+        bounds=bounds,
+        constraints=constraints
+    )
+
+    if not result.success:
+        raise RuntimeError(f"Optimization failed: {result.message}")
+
+    return result.x

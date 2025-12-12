@@ -1,6 +1,7 @@
 import unittest
 import pandas as pd
-from main import load_gdp_data, prepare_training_data
+import numpy as np # Added for np.testing.assert_allclose
+from main import load_gdp_data, prepare_training_data, train_synthetic_control_model
 
 class TestDataProcessing(unittest.TestCase):
 
@@ -55,6 +56,36 @@ class TestDataProcessing(unittest.TestCase):
             # This test might fail if the data for these specific countries/years isn't in the CSV.
             # We fail the test explicitly if a ValueError is raised, as it indicates a data preparation issue.
             self.fail(f"prepare_training_data raised a ValueError unexpectedly: {e}")
+
+    def test_train_synthetic_control_model(self):
+        """
+        Tests the synthetic control model training with a simple, predictable dataset.
+        """
+        # Create a simple dataset where y is the average of X's columns
+        # Expected weights: [0.5, 0.5]
+        X_test = np.array([
+            [10, 20],
+            [12, 22],
+            [14, 24]
+        ])
+        y_test = np.array([15, 17, 19]) # (10+20)/2 = 15, (12+22)/2 = 17, (14+24)/2 = 19
+
+        expected_weights = np.array([0.5, 0.5])
+        
+        try:
+            actual_weights = train_synthetic_control_model(X_test, y_test)
+            
+            # Check if weights are close to expected (floating point comparison)
+            np.testing.assert_allclose(actual_weights, expected_weights, atol=1e-6)
+            
+            # Verify sum of weights is 1
+            self.assertAlmostEqual(np.sum(actual_weights), 1.0)
+            
+            # Verify weights are non-negative
+            self.assertTrue(np.all(actual_weights >= 0))
+
+        except Exception as e:
+            self.fail(f"train_synthetic_control_model raised an exception unexpectedly: {e}")
 
 if __name__ == '__main__':
     unittest.main()
