@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy.optimize import minimize
 
+
 def load_gdp_data(file_path: str) -> pd.DataFrame:
     """
     Loads GDP per capita data from a CSV file into a Pandas DataFrame.
@@ -19,6 +20,7 @@ def load_gdp_data(file_path: str) -> pd.DataFrame:
     except Exception as e:
         print(f"Error loading GDP data: {e}")
         raise
+
 
 def prepare_training_data(
     df: pd.DataFrame,
@@ -67,6 +69,7 @@ def prepare_training_data(
     
     return X, y, list(filtered_df.index)
 
+
 def train_synthetic_control_model(X: np.ndarray, y: np.ndarray) -> np.ndarray:
     """
     Trains the synthetic control model to find optimal weights.
@@ -114,3 +117,54 @@ def train_synthetic_control_model(X: np.ndarray, y: np.ndarray) -> np.ndarray:
         raise RuntimeError(f"Optimization failed: {result.message}")
 
     return result.x
+
+
+def generate_synthetic_control(
+    df: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+    input_countries: list[str],
+    weights: np.ndarray
+) -> tuple[np.ndarray, list[int]]:
+    """
+    Generates the synthetic control data for the entire period.
+
+    Args:
+        df: DataFrame containing GDP per capita data.
+        start_year: The starting year for the entire period.
+        end_year: The ending year for the entire period.
+        input_countries: A list of country names used as input (control) units.
+        weights: The optimal weights from the trained model.
+
+    Returns:
+        A tuple containing:
+        - synthetic_y: NumPy array of the generated synthetic control data.
+        - years: List of years included in the data.
+    """
+    full_period_years = range(start_year, end_year + 1)
+
+    # Filter data for relevant years and countries
+    filtered_df = df[
+        (df['Year'].isin(full_period_years)) &
+        (df['Entity'].isin(input_countries))
+    ].pivot_table(index='Year', columns='Entity', values='GDPPerCapita')
+
+    # Ensure all required countries and years are present
+    missing_countries = [c for c in input_countries if c not in filtered_df.columns]
+    if missing_countries:
+        raise ValueError(f"Missing data for countries in the specified period: {missing_countries}")
+
+    missing_years = [y for y in full_period_years if y not in filtered_df.index]
+    if missing_years:
+        raise ValueError(f"Missing data for years in the specified period: {missing_years}")
+        
+    # Reorder columns to match the order of weights
+    filtered_df = filtered_df[input_countries]
+
+    # Get the data for the input countries
+    X_full = filtered_df.values
+
+    # Generate the synthetic control
+    synthetic_y = X_full @ weights
+
+    return synthetic_y, list(filtered_df.index)

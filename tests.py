@@ -1,7 +1,8 @@
 import unittest
 import pandas as pd
 import numpy as np # Added for np.testing.assert_allclose
-from main import load_gdp_data, prepare_training_data, train_synthetic_control_model
+from main import load_gdp_data, prepare_training_data, train_synthetic_control_model, generate_synthetic_control
+
 
 class TestDataProcessing(unittest.TestCase):
 
@@ -86,6 +87,41 @@ class TestDataProcessing(unittest.TestCase):
 
         except Exception as e:
             self.fail(f"train_synthetic_control_model raised an exception unexpectedly: {e}")
+
+    def test_generate_synthetic_control(self):
+        """
+        Tests the synthetic data generation with known weights and data.
+        """
+        # Create a simple DataFrame for testing
+        test_data = {
+            'Year': [2000, 2000, 2001, 2001],
+            'Entity': ['A', 'B', 'A', 'B'],
+            'GDPPerCapita': [100, 200, 110, 210]
+        }
+        test_df = pd.DataFrame(test_data)
+        
+        start_year = 2000
+        end_year = 2001
+        input_countries = ['A', 'B']
+        weights = np.array([0.4, 0.6])
+
+        # Expected output:
+        # Year 2000: 100*0.4 + 200*0.6 = 40 + 120 = 160
+        # Year 2001: 110*0.4 + 210*0.6 = 44 + 126 = 170
+        expected_synthetic_y = np.array([160, 170])
+        expected_years = [2000, 2001]
+        
+        try:
+            synthetic_y, years = generate_synthetic_control(
+                test_df, start_year, end_year, input_countries, weights
+            )
+            
+            np.testing.assert_allclose(synthetic_y, expected_synthetic_y)
+            self.assertEqual(years, expected_years)
+
+        except Exception as e:
+            self.fail(f"generate_synthetic_control raised an exception unexpectedly: {e}")
+
 
 if __name__ == '__main__':
     unittest.main()
